@@ -42,10 +42,20 @@ DeepSeek API 的 seed 行为未获保证，代理不转发 seed 并显式禁用 
 ### 进行中的任务与下一步
 
 - 模型：后台 model-relay，日志 logs/model-relay.log；下载路径 models/，完成后 artifacts/model-manifest.json 保存大小及哈希。任务列表和 immutable revision 在 artifacts/model-download-plan.json。
-- vLLM：后台 vllm-install，日志 logs/install-vllm.log；只有 exit=0 且版本导入检查成功才能认为依赖安装完成。尚未做 GPU 执行验证。
+- vLLM 安装完成，退出码 0；Python 3.11.14，torch 2.6.0+cu124 / runtime 12.4，vLLM 0.8.5，导入检查成功。日志 logs/install-vllm.log，尚未做 GPU 执行验证。
 - 本地代理已切换为 model-only：无真实 API key、拒绝 API POST（实测 HTTP 403），个人电脑需联网且保持唤醒。等待 GPU 时不继续发计费请求。
 - 已提交 9f4aeff（独立环境/工作区）及 3d3e442（评测/失败分析）。后续文档提交记录以 git log 为准。
 - 用户会通知 GPU 空闲；在此之前不占用 GPU。用户明确选择暂不 push，先保留服务器与本地 Git 提交，不将 GitHub 凭据放到共享服务器。
+
+## 2026-11-16：下载持续监看与传输排查
+
+- 3B 已完成下载与文件校验；7B 仍在下载，未填报完成。
+- 原串行下载继续；增加两个独立预取 worker，仅下载 7B 第 3、4 个权重分片。预取使用独立临时文件，按固定 HF 元数据的大小和 SHA256 验证后原子移入最终目录，主下载再次核验后复用。
+- 新增原子替换/错误哈希不可覆盖测试，服务器 2 项通过（0.078s）；全套 12 项通过（33.516s），日志 logs/tests-download-final.log。
+- 观察到 ModelScope 根域 DNS 超时，但 `www.modelscope.cn` 可直连，不能将根域检查结果泛化到 www 域名。官方 ModelScope 四个 7B 权重的大小、SHA256 均与固定 HF 版本完全相同；元数据记录在 artifacts/modelscope-7b-files.json 与 modelscope-hf-equivalence.json。
+- 直连 ModelScope pinned revision `077a6aff06a7d75066ecc3abe12ce0d673873603` 的 Range 探测返回 HTTP 206，读取 16777216 bytes 用时 62.553859297186136s。本次未切换主下载源，不能仅凭元数据接口可达就认为大文件传输更快。
+- 个人 tmp 目录 NFS 短写+fsync 探测：16777216 bytes，用时 0.05543260648846626s；探测文件随后删除。这是单次短写测量，不是持续磁盘性能或模型吞吐结果，不能外推。
+- 当前 API 代理维持无密钥 model-only 模式；未新增任何计费 API 请求。为等待下载临时启用本地防空闲休眠，下载结束后清理。
 
 ## 指标纪律
 
