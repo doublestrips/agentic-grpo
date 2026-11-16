@@ -18,10 +18,14 @@ def main():
     api = HfApi() if not relay else None
     plan_path = project / "artifacts/model-download-plan.json"
     plan = json.loads(plan_path.read_text()) if plan_path.exists() else {}
+    config_path = project / "configs/model-snapshots.json"
+    pinned = {r["model"]: r["revision"] for r in json.loads(config_path.read_text())["models"]} if config_path.exists() else {}
     if relay:
         for model in ("Qwen/Qwen2.5-3B-Instruct", "Qwen/Qwen2.5-7B-Instruct"):
+            if model in plan and model in pinned and plan[model]["sha"] != pinned[model]:
+                raise ValueError(f"cached model plan conflicts with pinned revision: {model}")
             if model not in plan:
-                with urllib.request.urlopen(f"{relay}/api/models/{model}/revision/main?blobs=true", timeout=120) as response:
+                with urllib.request.urlopen(f"{relay}/api/models/{model}/revision/{pinned.get(model, 'main')}?blobs=true", timeout=120) as response:
                     plan[model] = json.load(response)
                 atomic_json(plan_path, plan)
     records = []
@@ -30,7 +34,7 @@ def main():
             info = plan[model]
             revision = info["sha"]
         else:
-            info = api.model_info(model)
+            info = api.model_info(model, revision=pinned.get(model, "main"))
             revision = info.sha
         dest = root / "models" / model.split("/")[-1] / revision
         print(json.dumps({"model": model, "revision": revision, "destination": str(dest)}), flush=True)

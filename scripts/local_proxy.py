@@ -71,7 +71,7 @@ def main():
             if self.path.startswith("/hf/"):
                 # Fixed read-only official model origin. Never attach API key.
                 path = self.path[3:]
-                allowed = re.fullmatch(r"/api/models/Qwen/Qwen2\.5-(3|7)B-Instruct/revision/main\?blobs=true", path)
+                allowed = re.fullmatch(r"/api/models/Qwen/Qwen2\.5-(3|7)B-Instruct/revision/(main|[0-9a-f]{40})\?blobs=true", path)
                 allowed = allowed or re.fullmatch(r"/Qwen/Qwen2\.5-(3|7)B-Instruct/resolve/[0-9a-f]{40}/[A-Za-z0-9_.-]+", path)
                 if not allowed:
                     return self.reply(403, b'{"error":"model path not allowed"}')
