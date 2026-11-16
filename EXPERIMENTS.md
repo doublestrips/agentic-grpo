@@ -78,3 +78,11 @@ DeepSeek API 的 seed 行为未获保证，代理不转发 seed 并显式禁用 
 - 归档：results/20261116-model-download/ 保存 config.json、metrics.json 和关键日志；没有策略模型分数或训练结果。
 - 14 项完整正确性检查通过（24.809s），无需为文档归档重复运行。
 - 尚未启动 GPU 服务，等待用户通知可用 GPU 后执行官方示例与真实基线。GitHub 按用户要求暂不 push。
+
+## 2026-11-16T21:08:27.760943+08:00：从本机 Mac 上传 GitHub
+
+- 用户确认恢复此前跳过的上传操作。实际执行位置：`/Users/richard/Desktop/agenticRl/agentic-grpo`。
+- 本机 GitHub CLI 已认证为 doublestrips，并通过 API 确认对 doublestrips/agentic-grpo 有 push 权限。
+- 提交署名仍为 jack <wanxueyu1999@163.com>；该仓库使用本机 GitHub 凭据助手。服务器未配置 GitHub 凭据。
+- `git push --set-upstream origin main` 成功，远端新建 main，并设置本地跟踪 origin/main；首次上传源码提交为 60c269838f5418d23b4a273a07450e8c02f43fc3。
+- 上传前检查：工作区干净，43 个跟踪文件，无超过 20MiB 的文件，历史密钥模式扫描通过；模型、缓存与运行日志未上传。
