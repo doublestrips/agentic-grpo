@@ -7,29 +7,60 @@ import argparse
 import hashlib
 import json
 import os
+import time
+import http.client
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
-def transfer(url, destination, temporary, size, sha256):
+def transfer(url, destination, temporary, size, sha256=None, git_blob_id=None, attempts=5):
     destination, temporary = Path(destination), Path(temporary)
     temporary.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url)
+    for attempt in range(attempts):
+        offset = temporary.stat().st_size if temporary.exists() else 0
+        if offset > size:
+            raise ValueError(f"partial exceeds expected size: {destination.name}")
+        if offset == size:
+            break
+        try:
+            headers = {"Range": f"bytes={offset}-"} if offset else {}
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=180) as response:
+                append = response.status == 206 and offset > 0
+                if append and not response.headers.get("Content-Range", "").startswith(f"bytes {offset}-"):
+                    raise ValueError(f"invalid resume range: {destination.name}")
+                print(json.dumps({"file": destination.name, "attempt": attempt, "resume_from_bytes": offset,
+                                  "http_status": response.status, "appending": append}), flush=True)
+                with temporary.open("ab" if append else "wb") as out:
+                    while chunk := response.read(8 * 1024 * 1024):
+                        out.write(chunk)
+                    out.flush()
+                    os.fsync(out.fileno())
+            if temporary.stat().st_size != size:
+                raise OSError("incomplete response body")
+            break
+        except (OSError, urllib.error.URLError, http.client.IncompleteRead) as error:
+            if isinstance(error, urllib.error.HTTPError) and error.code not in (408, 429) and error.code < 500:
+                raise
+            print(json.dumps({"retry": attempt, "file": destination.name, "error_type": type(error).__name__,
+                              "partial_bytes": temporary.stat().st_size if temporary.exists() else 0}), flush=True)
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(min(2 ** attempt, 8))
     digest = hashlib.sha256()
-    total = 0
-    with urllib.request.urlopen(request, timeout=180) as response, temporary.open("wb") as out:
-        while chunk := response.read(8 * 1024 * 1024):
-            out.write(chunk)
+    blob = hashlib.sha1(f"blob {size}\0".encode()) if git_blob_id else None
+    with temporary.open("rb") as src:
+        for chunk in iter(lambda: src.read(8 * 1024 * 1024), b""):
             digest.update(chunk)
-            total += len(chunk)
-        out.flush()
-        os.fsync(out.fileno())
-    if total != size or digest.hexdigest() != sha256:
+            if blob is not None:
+                blob.update(chunk)
+    if temporary.stat().st_size != size or (sha256 and digest.hexdigest() != sha256) or (blob and blob.hexdigest() != git_blob_id):
         raise ValueError(f"prefetch size/SHA256 mismatch: {destination.name}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary.replace(destination)
-    return {"file": destination.name, "bytes": total, "sha256": sha256}
+    return {"file": destination.name, "bytes": size, "sha256": digest.hexdigest()}
 
 
 def main():

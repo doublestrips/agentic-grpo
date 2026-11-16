@@ -8,6 +8,7 @@ from pathlib import Path
 
 from huggingface_hub import HfApi, snapshot_download
 from eval.storage import atomic_json
+from scripts.prefetch_weights import transfer
 
 
 def main():
@@ -46,32 +47,13 @@ def main():
                 if valid and lfs_sha:
                     with path.open("rb") as src:
                         valid = hashlib.file_digest(src, "sha256").hexdigest() == lfs_sha
+                elif valid:
+                    valid = hashlib.sha1(f"blob {expected_size}\0".encode() + path.read_bytes()).hexdigest() == item["blobId"]
                 if not valid:
                     temporary = path.with_name(path.name + ".partial")
                     print(json.dumps({"downloading": name, "expected_bytes": expected_size}), flush=True)
-                    offset = temporary.stat().st_size if temporary.exists() else 0
-                    headers = {"Range": f"bytes={offset}-"} if offset else {}
-                    request = urllib.request.Request(f"{relay}/{model}/resolve/{revision}/{name}", headers=headers)
-                    with urllib.request.urlopen(request, timeout=180) as response:
-                        append = response.status == 206 and offset > 0
-                        print(json.dumps({"file": name, "resume_from_bytes": offset, "http_status": response.status, "appending": append}), flush=True)
-                        if append and not response.headers.get("Content-Range", "").startswith(f"bytes {offset}-"):
-                            raise ValueError(f"invalid resume range for {name}")
-                        with temporary.open("ab" if append else "wb") as out:
-                            while chunk := response.read(8 * 1024 * 1024):
-                                out.write(chunk)
-                    if expected_size is None or temporary.stat().st_size != expected_size:
-                        raise ValueError(f"size mismatch for {name}")
-                    if lfs_sha:
-                        with temporary.open("rb") as src:
-                            if hashlib.file_digest(src, "sha256").hexdigest() != lfs_sha:
-                                raise ValueError(f"LFS sha256 mismatch for {name}")
-                    else:
-                        # Verify Git blob ID for small tracked files.
-                        sha = hashlib.sha1(f"blob {expected_size}\0".encode() + temporary.read_bytes()).hexdigest()
-                        if sha != item["blobId"]:
-                            raise ValueError(f"Git blob hash mismatch for {name}")
-                    temporary.replace(path)
+                    transfer(f"{relay}/{model}/resolve/{revision}/{name}", path, temporary,
+                             expected_size, lfs_sha, None if lfs_sha else item["blobId"])
         else:
             snapshot_download(model, revision=revision, local_dir=dest,
                               allow_patterns=["*.json", "*.safetensors", "*.txt", "*.jinja", "*.model", "LICENSE", "README.md"], max_workers=2)
