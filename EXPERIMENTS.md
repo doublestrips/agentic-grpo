@@ -41,7 +41,7 @@ DeepSeek API 的 seed 行为未获保证，代理不转发 seed 并显式禁用 
 
 ### 进行中的任务与下一步
 
-- 模型：后台 model-relay，日志 logs/model-relay.log；下载路径 models/，完成后 artifacts/model-manifest.json 保存大小及哈希。任务列表和 immutable revision 在 artifacts/model-download-plan.json。
+- 模型下载已全部完成，主下载退出码 0；大小与哈希清单在 artifacts/model-manifest.json 和 docs/model-download-verification.json，固定快照在 configs/model-snapshots.json。
 - vLLM 安装完成，退出码 0；Python 3.11.14，torch 2.6.0+cu124 / runtime 12.4，vLLM 0.8.5，导入检查成功。日志 logs/install-vllm.log，尚未做 GPU 执行验证。
 - 本地代理已切换为 model-only：无真实 API key、拒绝 API POST（实测 HTTP 403），个人电脑需联网且保持唤醒。等待 GPU 时不继续发计费请求。
 - 已提交 9f4aeff（独立环境/工作区）及 3d3e442（评测/失败分析）。后续文档提交记录以 git log 为准。
@@ -57,6 +57,24 @@ DeepSeek API 的 seed 行为未获保证，代理不转发 seed 并显式禁用 
 - 个人 tmp 目录 NFS 短写+fsync 探测：16777216 bytes，用时 0.05543260648846626s；探测文件随后删除。这是单次短写测量，不是持续磁盘性能或模型吞吐结果，不能外推。
 - 当前 API 代理维持无密钥 model-only 模式；未新增任何计费 API 请求。为等待下载临时启用本地防空闲休眠，下载结束后清理。
 
+### 踩坑：长响应提前结束与严格续传
+
+- 北京时间 19:17 的监看发现主下载退出码 1：7B 第 1 分片预期 3945441440 bytes，实际 partial 为 3151593075 bytes，触发 `ValueError: size mismatch`，未提升为正式模型文件。HTTP 响应提前结束；底层断流原因尚未证实，不能归因于某个网络服务。
+- 修复提交 `936703c`：主下载与预取复用传输函数；中断后保留 partial，最多 5 次请求（含首次），续传 HTTP 206 与 Content-Range 必须匹配起点。完整文件还需通过大小和 SHA256 / Git blob ID；哈希错误不重试掩盖，不覆盖已有有效文件。
+- 实测主下载从 3151593075 bytes、两个预取分别从 1937768448 与 1946157056 bytes 接续，均为 HTTP 206。未重下已保留的前缀。
+- 新增断流测试：首次响应只返回 3 bytes，下一次请求必须为 `Range: bytes=3-`，最终校验通过；错误哈希测试确认有效文件不会被覆盖。传输 4 项测试通过（1.605s），全套 14 项通过（24.809s），日志 logs/tests-resume-final.log。
+- 预取最终退出码 0，第 3、4 分片大小分别为 3864726424 与 3556377672 bytes，SHA256 均等于固定 HF 元数据；主下载仍需完成其余文件及最终清单。
+- ModelScope 补充 IPv4 分段探测：HTTP 206，首字节 0.790309s，60.031707s 内收到 14253056 bytes 后触发 curl 超时（退出码 28），未收到完整的 16777216 bytes。连接建立耗时与传输耗时需区分；本次未用该通道替换主下载。
+
 ## 指标纪律
 
 合成测试只验证实现，不计入基线。所有真实评测以官方 reward 为依据；任务异常、模拟器异常和运行缺失单列。未运行的结果为 unavailable，禁止估算。
+
+## 2026-11-16T20:45:05.355612+08:00：模型下载最终完成
+
+- 主下载退出码 0；两个固定快照已核对所有文件大小，权重 SHA256 与固定 HF 元数据一致，小文件经 Git blob ID 校验。
+- Qwen/Qwen2.5-3B-Instruct：revision `aa8e72537993ba99e69dfaafa59ed015b17504d1`，11 个文件，6183463416 bytes；路径 `/traindata2/ganmuv3/models/Qwen2.5-3B-Instruct/aa8e72537993ba99e69dfaafa59ed015b17504d1`。
+- Qwen/Qwen2.5-7B-Instruct：revision `a09a35458c702b33eeacc393d103063234e8bc28`，13 个文件，15242805751 bytes；路径 `/traindata2/ganmuv3/models/Qwen2.5-7B-Instruct/a09a35458c702b33eeacc393d103063234e8bc28`。
+- 归档：results/20261116-model-download/ 保存 config.json、metrics.json 和关键日志；没有策略模型分数或训练结果。
+- 14 项完整正确性检查通过（24.809s），无需为文档归档重复运行。
+- 尚未启动 GPU 服务，等待用户通知可用 GPU 后执行官方示例与真实基线。GitHub 按用户要求暂不 push。
