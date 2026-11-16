@@ -45,7 +45,7 @@ DeepSeek API 的 seed 行为未获保证，代理不转发 seed 并显式禁用 
 - vLLM：后台 vllm-install，日志 logs/install-vllm.log；只有 exit=0 且版本导入检查成功才能认为依赖安装完成。尚未做 GPU 执行验证。
 - 本地代理已切换为 model-only：无真实 API key、拒绝 API POST（实测 HTTP 403），个人电脑需联网且保持唤醒。等待 GPU 时不继续发计费请求。
 - 已提交 9f4aeff（独立环境/工作区）及 3d3e442（评测/失败分析）。后续文档提交记录以 git log 为准。
-- 用户会通知 GPU 空闲；在此之前不占用 GPU。GitHub push 等本地认证恢复，不将 GitHub 凭据放到共享服务器。
+- 用户会通知 GPU 空闲；在此之前不占用 GPU。用户明确选择暂不 push，先保留服务器与本地 Git 提交，不将 GitHub 凭据放到共享服务器。
 
 ## 指标纪律
 

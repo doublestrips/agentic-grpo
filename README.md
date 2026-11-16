@@ -62,7 +62,14 @@ bash scripts/start_tunnel.sh
 
 ## GPU 服务与评测（待 GPU 分配）
 
-下载不需要 GPU：`python -m scripts.download_models`；推理环境安装：`bash scripts/install_vllm.sh`。长任务必须放入专属 tmux，日志写 logs/。
+下载不需要 GPU。在本地模型转发和隧道可用后执行：
+
+```bash
+tmux -L ganmuv3-agentic new-session -d -s model-relay 'bash scripts/download_models.sh'
+tmux -L ganmuv3-agentic new-session -d -s vllm-install 'bash scripts/install_vllm.sh'
+```
+
+如果对应会话已经存在，先查看日志，不重复启动。长任务均放入专属 tmux，日志写 logs/。
 
 ```bash
 export APPROVED_GPU_UUIDS=GPU-指定的完整UUID
