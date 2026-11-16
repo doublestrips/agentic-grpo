@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+logs/*
+!logs/.gitkeep
+results/*
+!results/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+.DS_Store

@@ -1,0 +1,4 @@
+# Deliberately use a CUDA 12.4-era vLLM build for driver 550.
+# Verify resolved torch/runtime versions and actual CUDA execution before serving.
+vllm==0.8.5
+transformers==4.51.3
