@@ -13,3 +13,4 @@ results/*
 artifacts/*
 !artifacts/.gitkeep
 .DS_Store
+.nfs*

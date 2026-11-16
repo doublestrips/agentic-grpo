@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 source scripts/activate.sh
 mkdir -p "$AGENTIC_ROOT/tools/bin" "$AGENTIC_ROOT/tools/downloads" "$TMPDIR" logs artifacts
 exec > >(tee -a logs/bootstrap.log) 2>&1
+rm -f logs/bootstrap.exit
 trap 'code=$?; printf "%s\n" "$code" > logs/bootstrap.exit' EXIT
 date -Is
 upstream="$AGENTIC_ROOT/sources/tau-bench"

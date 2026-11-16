@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/activate.sh
 exec > >(tee -a logs/install-vllm.log) 2>&1
+rm -f logs/install-vllm.exit
 trap 'code=$?; printf "%s\n" "$code" > logs/install-vllm.exit' EXIT
 if [ ! -x "$AGENTIC_ROOT/envs/vllm/bin/python" ]; then
   uv venv --python 3.11.14 "$AGENTIC_ROOT/envs/vllm"
